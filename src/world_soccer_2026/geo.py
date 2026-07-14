@@ -24,7 +24,7 @@ import pandas as pd
 # Altitudes en mètres.
 
 CITY_ALTITUDE = {
-    # Andes : l'effet est ici, et il est massif
+    # Andes :
     "La Paz": 3640, "El Alto": 4150, "Potosí": 4090, "Oruro": 3706,
     "Cochabamba": 2558, "Sucre": 2810, "Santa Cruz de la Sierra": 416,
     "Quito": 2850, "Ambato": 2577, "Riobamba": 2754, "Cuenca": 2560,
@@ -98,7 +98,7 @@ MANUAL_COORDS = {
 }
 
 
-def load_coords(path="../data/country_centroids.csv"):
+def load_coords(path="data/country_centroids.csv"):
     """Renvoie un dict {nom de pays -> (lat, lon)} adapté au vocabulaire du dataset."""
     table = pd.read_csv(path)
     base = {r.country: (r.latitude, r.longitude) for r in table.itertuples()}

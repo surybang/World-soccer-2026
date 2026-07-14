@@ -5,19 +5,12 @@ FIFA : il contient des équipes régionales et non reconnues (ConIFA, Island
 Games, Jeux insulaires), comme l'Andalousie, l'Occitanie, Ynys Môn, Tamil Eelam
 ou Jersey.
 
-Pourquoi ce n'est pas qu'un détail cosmétique : **un Elo n'a de sens que si le
-graphe des confrontations est connexe.** L'Andalousie joue l'Occitanie, qui joue
-la Padanie : elles forment un bassin quasi isolé du reste du monde. Leurs notes
+Un Elo n'a de sens que si le graphe des confrontations est connexe.** L'Andalousie joue l'Occitanie,
+qui joue la Padanie : elles forment un bassin quasi isolé du reste du monde. Leurs notes
 Elo dérivent dans leur coin et ne sont PAS sur la même échelle que celles des
 sélections FIFA. Le modèle recevrait alors un nombre d'apparence comparable, mais
-qui ne l'est pas. C'est plus dangereux qu'une feature naïve, parce que ça inspire
-confiance.
-
-Trois critères, du plus sémantique au plus mécanique. On les combine.
+qui ne l'est pas.
 """
-
-from __future__ import annotations
-
 import networkx as nx
 import pandas as pd
 
