@@ -129,8 +129,7 @@ if not bt.empty:
         st.caption(
             "Quand le modèle annonçait cette confiance, à quelle fréquence "
             "avait-il raison ? Les effectifs sont faibles (une dizaine de matchs "
-            "par tranche), donc ce tableau illustre plus qu'il ne démontre. La "
-            "calibration sérieuse est celle du notebook, sur des milliers de matchs.")
+            "par tranche), donc ce tableau illustre plus qu'il ne démontre.")
 
     st.divider()
 
