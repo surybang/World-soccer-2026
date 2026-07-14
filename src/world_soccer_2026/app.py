@@ -24,7 +24,7 @@ st.caption(
     f"XGBoost entraîné sur {meta['n_matchs']} matchs internationaux, coupé au "
     f"{meta['coupure']}, la veille du coup d'envoi. Le modèle n'a vu aucun match "
     "de ce tournoi, ni à l'entraînement, ni dans les données qui alimentent ses "
-    "features. Les pronostics sont donc hors échantillon.")
+    "features.")
 
 # 1. MATCHS À VENIR
 st.header("Le dernier carré")
@@ -47,7 +47,7 @@ st.caption(
 
 tab = pd.DataFrame({"atteint la finale": demi, "gagne le tournoi": titres})
 st.bar_chart(tab["gagne le tournoi"])
-st.dataframe(tab.style.format("{:.1%}"), use_container_width=True)
+st.dataframe(tab.style.format("{:.1%}"), width='stretch')
 
 st.caption(
     "L'écart entre les deux colonnes est le point à retenir : atteindre la "
@@ -98,7 +98,7 @@ if not bt.empty:
         st.dataframe(
             bt_mod.par_phase(bt).style.format(
                 {"reussite": "{:.0%}", "confiance": "{:.0%}"}),
-            use_container_width=True)
+            width='stretch')
         st.caption(
             "Les tours avancés sont plus durs à prédire, et ce n'est pas un "
             "défaut du modèle : un huitième oppose souvent un favori à un "
@@ -107,7 +107,7 @@ if not bt.empty:
     with o2:
         st.caption("Forte confiance, mauvais pronostic.")
         st.dataframe(bt_mod.surprises(bt).style.format({"confiance": "{:.0%}"}),
-                     use_container_width=True, hide_index=True)
+                     width='stretch', hide_index=True)
 
     with o3:
         vue = bt.copy()
@@ -119,13 +119,13 @@ if not bt.empty:
         st.dataframe(
             vue[["date", "phase", "equipe_a", "equipe_b", "score",
                  "pronostic", "issue"]],
-            use_container_width=True, hide_index=True)
+            width='stretch', hide_index=True)
 
     with st.expander("Calibration : le modèle tient-il ses promesses ?"):
         st.dataframe(
             bt_mod.calibration(bt).style.format(
                 {"annonce": "{:.0%}", "observe": "{:.0%}"}),
-            use_container_width=True)
+            width='stretch')
         st.caption(
             "Quand le modèle annonçait cette confiance, à quelle fréquence "
             "avait-il raison ? Les effectifs sont faibles (une dizaine de matchs "
@@ -154,10 +154,18 @@ with c2:
     terrain = st.radio("Terrain", ["Neutre", "A reçoit", "B reçoit"],
                        index=0, horizontal=True)
 
+neutraliser = st.checkbox(
+    "Contexte tournoi (équipes acclimatées, déjà sur place)", value=True,
+    help="Les features géographiques (voyage, altitude, climat) ont été apprises "
+         "sur des qualifs et des amicaux, où l'équipe arrive deux jours avant. "
+         "En Coupe du Monde, les équipes sont sur place depuis des semaines : "
+         "ces handicaps n'existent plus. Décoche pour voir l'effet brut.")
+
 home_adv = {"Neutre": 0, "A reçoit": 1, "B reçoit": -1}[terrain]
 
 p = predict.match_proba(a, b, ville, pays, importance=4,
-                        home_advantage=home_adv)
+                        home_advantage=home_adv,
+                        neutraliser_geo=neutraliser)
 
 gagnant, proba = (a, p) if p >= .5 else (b, 1 - p)
 st.metric(f"{gagnant} l'emporte", f"{proba:.0%}")
@@ -177,12 +185,12 @@ with st.expander("Pourquoi ce pronostic ?"):
             "entre la probabilité prédite et la probabilité moyenne du modèle.")
         st.dataframe(
             shap_df.style.format({"contribution": "{:+.3f}", "valeur": "{:.1f}"}),
-            use_container_width=True)
+            width='stretch')
     else:
         st.caption("Installe `shap` pour voir le détail des contributions.")
 
     st.markdown("**Écarts bruts entre les deux équipes**")
-    st.dataframe(predict.compare(a, b, ville, pays), use_container_width=True)
+    st.dataframe(predict.compare(a, b, ville, pays), width='stretch')
 
 st.divider()
 st.caption(

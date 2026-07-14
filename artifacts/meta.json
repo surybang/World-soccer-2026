@@ -3,16 +3,18 @@
   "n_equipes": 206,
   "derniere_date": "2026-06-10",
   "coupure": "2026-06-11",
-  "best_params": {
-    "n_estimators": 600,
-    "learning_rate": 0.05898602410432694,
-    "max_depth": 2,
-    "min_child_weight": 19,
-    "subsample": 0.6682096494749166,
-    "colsample_bytree": 0.5325257964926398,
-    "reg_lambda": 13.561246837383383,
-    "reg_alpha": 3.7311604524743114,
-    "gamma": 0.9777718780862645
-  },
-  "cv_log_loss": 0.4878154322504997
+  "features": [
+    "diff_elo",
+    "diff_sos_10",
+    "diff_pts_20",
+    "diff_gd_10",
+    "diff_rest_days",
+    "diff_alt_shock",
+    "diff_travel_km",
+    "diff_climate_shift",
+    "venue_altitude",
+    "h2h_winrate",
+    "home_advantage",
+    "min_n_matches"
+  ]
 }

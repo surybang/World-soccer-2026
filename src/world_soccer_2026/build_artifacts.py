@@ -1,6 +1,6 @@
 """Construit les artefacts que l'app Streamlit consommera.
 
-À lancer UNE FOIS en local, puis committer le dossier artifacts/ dans le repo.
+> À lancer UNE FOIS en local sinon réutiliser ce qui est dans le dossier artifacts.
 
 Pourquoi ne pas simplement appeler prepare() au démarrage de l'app :
   - prepare() met une dizaine de secondes et relit tout results.csv ;
@@ -15,18 +15,18 @@ import json
 from pathlib import Path
 
 import joblib
-import numpy as np
-import pandas as pd
+from sklearn.pipeline import Pipeline
+from xgboost import XGBClassifier
 
-from world_soccer_2026.features import TEAM_STATS, prepare, team_snapshot
-from world_soccer_2026.benchmark import fit_best_xgboost, make_xy, temporal_split, tune_xgboost
-import world_soccer_2026.backtest
+from world_soccer_2026 import backtest
+from world_soccer_2026.benchmark import make_xy, preprocessor
+from world_soccer_2026.features import FEATURES_SELECTED, prepare
 from world_soccer_2026.fixtures import WC_START
 from world_soccer_2026.selection import select_teams
 from world_soccer_2026.utils import load_results
 
-ARTIFACTS = Path("artifacts")
-N_TRIALS = 8
+ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS = ROOT / "artifacts"
 
 
 def head_to_head_table(df):
@@ -59,7 +59,13 @@ def main():
     ARTIFACTS.mkdir(exist_ok=True)
 
     print("1/5  chargement et filtrage")
-    raw = load_results("data/results.csv")
+    brut = load_results(ROOT / "data" / "results.csv")   # gardé pour le rétro-test
+
+    raw = brut[(brut["year"] >= 1994) & (brut["date"] < WC_START)]
+    print(f"     coupure au {WC_START.date()} : {len(raw)} matchs, "
+          f"dernier le {raw['date'].max().date()}")
+
+    raw, _ = select_teams(raw, min_matches=50, require_fifa=True)
 
     # COUPURE AU COUP D'ENVOI DU TOURNOI.
     # Ce n'est pas qu'une question de train : les SNAPSHOTS (Elo, forme) sont
@@ -73,26 +79,30 @@ def main():
     raw, _ = select_teams(raw, min_matches=50, require_fifa=True)
 
     print("2/5  features (Elo, forme, h2h, géo)")
-    df, ratings, base = prepare(raw)
+    df, ratings, base, snapshots = prepare(raw)
 
-    print(f"3/5  tuning XGBoost ({N_TRIALS} essais Optuna)")
-    train_df, _ = temporal_split(df, test_year=2022)
-    # Le tuning se fait sur le train du split temporel (mesure honnête), mais
-    # le modèle final est réentraîné sur TOUT l'historique disponible, c'est à
-    # dire tout ce qui précède le coup d'envoi du tournoi.
-    X_tr, y_tr = make_xy(train_df, mirror=True)
-    study = tune_xgboost(X_tr, y_tr, n_trials=N_TRIALS)
-
+    print("3/5  entraînement XGBoost")
+    # Pas de tuning : Optuna dégrade la log loss sur les deux jeux de features
+    # (0.4454 -> 0.4463 sur 12 features, 0.4473 -> 0.4475 sur 22). Les valeurs
+    # par défaut sont déjà dans la zone plate de l'espace de recherche.
+    # Le modèle final est entraîné sur TOUT l'historique disponible, c'est à dire
+    # tout ce qui précède le coup d'envoi du tournoi.
     X_all, y_all = make_xy(df, mirror=True)
-    model = fit_best_xgboost(study, X_all, y_all)
+
+    model = Pipeline([
+        ("prep", preprocessor()),
+        ("clf", XGBClassifier(n_estimators=400, learning_rate=.05, max_depth=4,
+                              subsample=.8, colsample_bytree=.8,
+                              eval_metric="logloss", tree_method="hist",
+                              random_state=42, n_jobs=-1)),
+    ]).fit(X_all[FEATURES_SELECTED], y_all)
+
     joblib.dump(model, ARTIFACTS / "model.joblib", compress=3)
-    print(f"     log loss CV : {study.best_value:.4f}")
+    print(f"     {len(FEATURES_SELECTED)} features, {len(X_all)} lignes (miroir inclus)")
 
     print("4/5  snapshots des équipes")
-    equipes = sorted(set(df["home_team"]) | set(df["away_team"]))
-    snaps = {t: team_snapshot(df, ratings, t) for t in equipes}
-    snap_df = pd.DataFrame(snaps).T[TEAM_STATS]
-    snap_df.index.name = "team"
+    equipes = list(snapshots.index)
+    snap_df = snapshots
 
     out = snap_df.join(base.reindex(snap_df.index))
     out.to_parquet(ARTIFACTS / "teams.parquet")
@@ -108,28 +118,27 @@ def main():
         "n_equipes": len(equipes),
         "derniere_date": str(df["date"].max().date()),
         "coupure": str(WC_START.date()),
-        "best_params": study.best_params,
-        "cv_log_loss": float(study.best_value),
+        "features": FEATURES_SELECTED,
     }
     (ARTIFACTS / "meta.json").write_text(json.dumps(meta, indent=2))
 
     print("5/5  rétro-test sur la Coupe du Monde en cours")
-    import predict
+    from world_soccer_2026 import predict
     predict.load.cache_clear()          # relire les artefacts qu'on vient d'écrire
     connues = set(snap_df.index)
 
-    bt = world_soccer_2026.backtest.run(
-        load_results("data/results.csv"), WC_START,
-        lambda a, b, city, country: predict.match_proba(a, b, city, country),
-        connues)
+    bt = backtest.run(
+            brut, WC_START,
+            lambda a, b, city, country: predict.match_proba(a, b, city, country),
+            connues)
 
     if bt.empty:
         print("     aucun match de CDM 2026 dans results.csv")
     else:
         bt.to_parquet(ARTIFACTS / "backtest.parquet")
-        r = world_soccer_2026.backtest.summarise(bt)
-        print(f"     {r['n_matchs']} matchs, {r['n_nuls']} nuls écartés")
-        print(f"     réussite {r['accuracy']:.1%} sur les {r['n_decisifs']} décisifs "
+        r = backtest.summarise(bt)
+        print(f"{r['n_matchs']} matchs, {r['n_nuls']} nuls écartés")
+        print(f"réussite {r['accuracy']:.1%} sur les {r['n_decisifs']} décisifs "
               f"| log loss {r['log_loss']:.4f}")
 
     total = sum(f.stat().st_size for f in ARTIFACTS.iterdir())

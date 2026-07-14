@@ -18,7 +18,7 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
-from world_soccer_2026.features import ALL_STATS, FEATURES, TEAM_STATS, team_snapshot
+from world_soccer_2026.features import ALL_STATS, FEATURES, team_snapshot
 from world_soccer_2026.geo import ALTITUDE_FLOOR, city_altitude, haversine, load_coords
 
 
@@ -36,7 +36,7 @@ def venue_geo(team, base, venue_city, venue_country, coords):
     }
 
 
-def build_pair_matrix(model, teams, df, ratings, base,
+def build_pair_matrix(model, teams, snapshots, base,
                       venue=("Madrid", "Spain"), importance=4, coords=None):
     """Renvoie P[(a, b)] = probabilité que a batte b, sur un stade donné.
 
@@ -51,7 +51,7 @@ def build_pair_matrix(model, teams, df, ratings, base,
     venue_city, venue_country = venue
 
     teams = list(dict.fromkeys(teams))
-    snaps = {t: team_snapshot(df, ratings, t) for t in teams}
+    snaps = {t: team_snapshot(snapshots, t) for t in teams}
     geo = {t: venue_geo(t, base, venue_city, venue_country, coords) for t in teams}
     for t in teams:
         snaps[t].update(geo[t])

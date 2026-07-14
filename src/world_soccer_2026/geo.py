@@ -12,6 +12,8 @@ matchs à domicile. Aucune table à maintenir, et ça gère sans effort les cas
 tordus (Angleterre, Écosse et Pays de Galles ne sont pas des pays ISO).
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -98,9 +100,15 @@ MANUAL_COORDS = {
 }
 
 
-def load_coords(path="data/country_centroids.csv"):
+# Chemin résolu depuis la racine du projet, et non depuis le répertoire
+# courant : le notebook tourne depuis notebooks/, l'app depuis la racine.
+ROOT = Path(__file__).resolve().parents[2]
+CENTROIDS = ROOT / "data" / "country_centroids.csv"
+
+
+def load_coords(path=None):
     """Renvoie un dict {nom de pays -> (lat, lon)} adapté au vocabulaire du dataset."""
-    table = pd.read_csv(path)
+    table = pd.read_csv(CENTROIDS if path is None else path)
     base = {r.country: (r.latitude, r.longitude) for r in table.itertuples()}
 
     coords = dict(base)

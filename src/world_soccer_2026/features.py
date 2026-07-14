@@ -210,6 +210,29 @@ FEATURES_NO_GEO = [f for f in FEATURES
                    if not any(g in f for g in GEO_STATS)
                    and f != "venue_altitude"]
 
+# Les features du TD d'origine (Machine Learnia), reconstruites à l'identique
+# dans notre cadrage A contre B. Sert de point de départ mesurable : toute la
+# progression du projet se lit comme l'écart entre ce jeu et les suivants.
+FEATURES_TD = ["diff_pts_10", "diff_gs_10", "diff_gc_10",
+               "home_advantage", "is_friendly"]
+
+# Jeu retenu après sélection (RFECV + test contre features fantômes).
+# Douze features au lieu de vingt-deux, à performance égale.
+# Voir la partie "Sélection de features" du notebook : ce jeu est déterminé
+# SUR LE TRAIN uniquement, jamais en regardant le test.
+FEATURES_SELECTED = [
+    "diff_elo", "diff_sos_10", "diff_pts_20", "diff_gd_10", "diff_rest_days",
+    "diff_alt_shock", "diff_travel_km", "diff_climate_shift", "venue_altitude",
+    "h2h_winrate", "home_advantage", "min_n_matches",
+]
+
+JEUX_DE_FEATURES = {
+    "TD (5 features)": FEATURES_TD,
+    "sans géographie": FEATURES_NO_GEO,
+    "complet": FEATURES,
+    "sélectionné": FEATURES_SELECTED,
+}
+
 
 def build_pair_frame(df, mirror=False):
     """Passe du cadrage 'domicile contre extérieur' au cadrage 'A contre B'.
@@ -259,8 +282,20 @@ def build_pair_frame(df, mirror=False):
 # 5. Pipeline complet
 # ---------------------------------------------------------------------------
 
+
 def prepare(raw, drop_draws=True):
-    """Elo -> forme -> head to head -> géo. Renvoie (df, notes Elo, bases géo)."""
+    """Elo -> forme -> head to head -> géo.
+
+    Renvoie (df, ratings, base, snapshots).
+
+    `snapshots` est l'état de chaque équipe à la fin de la période, capturé
+    AVANT la suppression des nuls. C'est essentiel : add_team_form calcule
+    pts_10 sur tous les matchs, nuls compris, alors que le df renvoyé n'a plus
+    que les matchs décisifs. Reconstruire l'état a posteriori depuis ce df
+    surestimerait la forme d'environ +0.12 point par match (les nuls, qui ne
+    rapportent qu'un point, disparaissent de la moyenne). Le modèle verrait
+    alors une distribution à l'entraînement et une autre en prédiction.
+    """
     df = raw.sort_values("date").reset_index(drop=True)
     df = df.dropna(subset=["home_score", "away_score"])
     df, ratings = add_elo(df)
@@ -272,45 +307,65 @@ def prepare(raw, drop_draws=True):
     base = team_home_base(df, coords)
     df = add_geo(df, coords, base)
     df = df.dropna(subset=["home_pts_10", "away_pts_10"]).reset_index(drop=True)
+
+    snapshots = build_snapshots(df, ratings)
+
     if drop_draws:
         df = df[df["home_score"] != df["away_score"]].reset_index(drop=True)
-    return df, ratings, base
+    return df, ratings, base, snapshots
 
 
 # ---------------------------------------------------------------------------
 # 6. État courant d'une équipe (pour prédire un match futur)
 # ---------------------------------------------------------------------------
 
-def team_snapshot(df, ratings, team, window=10):
-    """Photographie de l'état d'une équipe à la fin du dataset.
+def build_snapshots(df, ratings):
+    """État courant de chaque équipe, lu dans les colonnes déjà calculées.
 
-    Sert à construire les features d'un match qui n'a pas encore eu lieu.
-    Les colonnes produites portent les mêmes noms que TEAM_STATS.
+    On ne recalcule rien : add_team_form a produit home_pts_10, away_sos_10 et
+    consorts avec le bon shift(1) et sur TOUS les matchs. Il suffit de prendre,
+    pour chaque équipe, la ligne de son dernier match et d'y lire ses features
+    du bon côté (home ou away).
+
+    Cette approche corrige trois défauts de l'ancienne version, qui
+    reconstruisait l'état à la main :
+      - pts_20 valait pts_10 (la fenêtre de reconstruction était de 10) ;
+      - rest_days était une constante de 30 jours, contre une médiane réelle
+        de l'ordre de 10 ;
+      - les nuls étaient absents du calcul, gonflant pts_10.
     """
-    mask = (df["home_team"] == team) | (df["away_team"] == team)
-    hist = df.loc[mask]
-    if hist.empty:
-        raise ValueError(f"Aucun match trouvé pour '{team}' (nom en anglais ?)")
+    stats = [f"pts_{w}" for w in WINDOWS] + [
+        "gs_10", "gc_10", "gd_10", "win_10", "sos_10", "rest_days"]
 
-    total = len(hist)
-    hist = hist.tail(window)
-    is_home = (hist["home_team"] == team).to_numpy()
+    lignes = {}
+    for team in sorted(set(df["home_team"]) | set(df["away_team"])):
+        m = df[(df["home_team"] == team) | (df["away_team"] == team)]
+        if m.empty:
+            continue
+        derniere = m.iloc[-1]
+        cote = "home" if derniere["home_team"] == team else "away"
 
-    gs = np.where(is_home, hist["home_score"], hist["away_score"]).astype(float)
-    gc = np.where(is_home, hist["away_score"], hist["home_score"]).astype(float)
-    opp_elo = np.where(is_home, hist["away_elo"], hist["home_elo"]).astype(float)
-    pts = np.where(gs > gc, 3.0, np.where(gs == gc, 1.0, 0.0))
+        etat = {s: float(derniere[f"{cote}_{s}"]) for s in stats}
+        etat["elo"] = float(derniere[f"{cote}_elo"])
+        etat["n_matches"] = float(derniere[f"{cote}_n_matches"])
 
-    return {
-        "elo": ratings.get(team, 1500.0),
-        "n_matches": float(total),
-        "pts_5": pts[-5:].mean(),
-        "pts_10": pts.mean(),
-        "pts_20": pts.mean(),   # pas plus de `window` matchs disponibles ici
-        "gs_10": gs.mean(),
-        "gc_10": gc.mean(),
-        "gd_10": (gs - gc).mean(),
-        "win_10": (gs > gc).mean(),
-        "sos_10": opp_elo.mean(),
-        "rest_days": 30.0,      # hypothèse : repos standard avant un tournoi
-    }
+        # L'Elo et le compteur de matchs stockés dans la ligne sont ceux
+        # d'AVANT ce match. On applique la dernière mise à jour, qui est dans
+        # `ratings`, pour obtenir l'état réellement courant.
+        etat["elo"] = float(ratings[team])
+        etat["n_matches"] += 1
+
+        lignes[team] = etat
+
+    out = pd.DataFrame(lignes).T
+    out.index.name = "team"
+    return out[TEAM_STATS]
+
+
+def team_snapshot(snapshots, team):
+    """État d'une équipe, sous forme de dict. Lève si l'équipe est inconnue."""
+    if team not in snapshots.index:
+        raise KeyError(
+            f"'{team}' absente des snapshots. Elle a probablement été écartée "
+            f"par select_teams (trop peu de matchs, ou hors périmètre FIFA).")
+    return dict(snapshots.loc[team])
