@@ -219,6 +219,6 @@ __marimo__/
 
 
 # data
-*.csv
+results.csv
 *.parquet
 *.xlsx
