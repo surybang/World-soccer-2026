@@ -40,10 +40,6 @@ for m in DEMI_FINALES:
     st.progress(float(p))
 
 st.subheader("Qui soulève la coupe ?")
-st.caption(
-    "Probabilités exactes, pas simulées : avec quatre équipes il n'y a que "
-    "quatre chemins possibles, on les énumère. Le Monte-Carlo n'est nécessaire "
-    "que sur un tableau complet.")
 
 tab = pd.DataFrame({"atteint la finale": demi, "gagne le tournoi": titres})
 st.bar_chart(tab["gagne le tournoi"])
