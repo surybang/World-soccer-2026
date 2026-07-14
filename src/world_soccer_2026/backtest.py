@@ -1,11 +1,9 @@
 """Rejoue la Coupe du Monde 2026 avec le modèle d'avant le tournoi.
 
-Règle du jeu, et c'est ce qui rend l'exercice honnête : TOUTES les prédictions
-utilisent l'état des équipes au 10 juin 2026, la veille du coup d'envoi. Aucune
-mise à jour au fil de la compétition.
+Règle du jeu : TOUTES les prédictions utilisent l'état des équipes au 10 juin 2026,
+la veille du coup d'envoi. Aucune mise à jour au fil de la compétition.
 
-Limite: le modèle est binaire (victoire ou défaite), les nuls
-ayant été écartés de l'entraînement.
+Limite: le modèle est binaire (victoire ou défaite), les nuls ayant été écartés de l'entraînement.
 """
 import numpy as np
 import pandas as pd
