@@ -11,7 +11,7 @@ prédictions. Les pronostics et le rétro-test sont donc hors échantillon.
 
 ---
 
-## Le résultat en une phrase
+## Résumé des résultats observés
 
 **Le gain vient de la représentation, pas du machine learning.** Le jeu de features
 du TD atteint 0,561 de log loss. La formule d'Elo, publiée en 1960 pour les échecs et
@@ -222,12 +222,13 @@ jour en cours de route** : les quarts sont prédits sans connaître les huitièm
 
 | | |
 |---|---|
-| Matchs prédits | à remplir |
+| Matchs prédits | 96 |
 | dont décisifs | 72 |
-| dont nuls (hors champ du modèle) | à remplir |
-| Bons pronostics | ~86% |
-| Confiance moyenne | ~76% |
-| Log loss | à remplir |
+| dont nuls (hors champ du modèle) | 24 |
+| Bons pronostics | 86.1% |
+| Confiance moyenne | 76.2% |
+| Log loss | 0.3878 |
+| Brier | 0.1185 |
 
 L'écart entre **réussite** et **confiance moyenne** est ce qu'il faut regarder : s'ils
 coïncident, le modèle est calibré, ce qui est un résultat plus solide qu'une accuracy
