@@ -18,7 +18,7 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
-from world_soccer_2026.features import ALL_STATS, FEATURES, team_snapshot
+from world_soccer_2026.features import ALL_STATS, team_snapshot
 from world_soccer_2026.geo import ALTITUDE_FLOOR, city_altitude, haversine, load_coords
 
 
@@ -37,7 +37,7 @@ def venue_geo(team, base, venue_city, venue_country, coords):
 
 
 def build_pair_matrix(model, teams, snapshots, base,
-                      venue=("Madrid", "Spain"), importance=4, coords=None):
+                      venue=("Dallas", "USA"), importance=4, coords=None):
     """Renvoie P[(a, b)] = probabilité que a batte b, sur un stade donné.
 
     Le `venue` compte : à Madrid (667 m) le choc d'altitude est nul pour tout le
@@ -58,6 +58,7 @@ def build_pair_matrix(model, teams, snapshots, base,
 
     pairs = list(combinations(teams, 2))
     v_alt = city_altitude(venue_city)
+    feats = list(model.named_steps["clf"].feature_names_in_)
 
     def row(a, b):
         r = {f"diff_{s}": snaps[a][s] - snaps[b][s] for s in ALL_STATS}
@@ -67,8 +68,8 @@ def build_pair_matrix(model, teams, snapshots, base,
         return r
 
     # un seul appel au modèle pour les 2 x 496 lignes
-    ab = pd.DataFrame([row(a, b) for a, b in pairs])[FEATURES]
-    ba = pd.DataFrame([row(b, a) for a, b in pairs])[FEATURES]
+    ab = pd.DataFrame([row(a, b) for a, b in pairs])[feats]
+    ba = pd.DataFrame([row(b, a) for a, b in pairs])[feats]
     batch = pd.concat([ab, ba], ignore_index=True)
 
     proba = model.predict_proba(batch)[:, 1]
