@@ -9,6 +9,9 @@ chaque étape.
 match du tournoi, ni à l'entraînement, ni dans les features qui alimentent ses
 prédictions. Les pronostics et le rétro-test sont donc hors échantillon.
 
+
+[Accéder à l'application sur Streamlit Community Cloud](https://elo-is-all-you-need.streamlit.app/)
+
 ---
 
 ## Résumé des résultats observés
