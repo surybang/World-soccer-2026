@@ -134,20 +134,30 @@ def explain_match(a, b, venue_city="Dallas", venue_country="United States",
     return expl.shap_un_match(model, ligne, top=top)
 
 
-def compare(a, b, venue_city="Dallas", venue_country="United States"):
-    """Écarts bruts entre les deux équipes, pour lire le pronostic à l'oeil."""
-    _, teams, _, _, coords = load()
-    alt = city_altitude(venue_city)
-    lat, lon = coords.get(venue_country, (40.4, -3.7))
+def compare(a, b, venue_city="Dallas", venue_country="United States",
+            neutraliser_geo=True):
+    """Écarts bruts entre les deux équipes, pour lire le pronostic à l'oeil.
+
+    On n'affiche que les stats qui nourrissent réellement le modèle (celles dont
+    le `diff_` est dans meta["features"]), pour que l'explication ne contredise
+    pas la prédiction. La géo n'est montrée que si elle n'est pas neutralisée.
+    """
+    _, teams, _, meta, coords = load()
+    feats = meta["features"]
 
     lignes = []
-    for s_ in ["elo", "pts_20", "pts_10", "gd_10", "sos_10", "rest_days"]:
-        lignes.append({"critère": s_, a: teams.loc[a, s_], b: teams.loc[b, s_]})
+    for s_ in ["elo", "sos_10", "pts_20", "pts_10", "gd_10", "rest_days"]:
+        if f"diff_{s_}" in feats:          # ne montrer que ce que le modèle voit
+            lignes.append({"critère": s_, a: teams.loc[a, s_], b: teams.loc[b, s_]})
 
-    ga = geo_for(a, teams, alt, lat, lon)
-    gb = geo_for(b, teams, alt, lat, lon)
-    for s_ in ["alt_shock", "travel_km"]:
-        lignes.append({"critère": s_, a: ga[s_], b: gb[s_]})
+    if not neutraliser_geo:                # la géo ne compte qu'en dehors du tournoi
+        alt = city_altitude(venue_city)
+        lat, lon = coords.get(venue_country, (40.7, -74.0))
+        ga = geo_for(a, teams, alt, lat, lon)
+        gb = geo_for(b, teams, alt, lat, lon)
+        for s_ in ["alt_shock", "travel_km", "climate_shift"]:
+            if f"diff_{s_}" in feats:
+                lignes.append({"critère": s_, a: ga[s_], b: gb[s_]})
 
     return pd.DataFrame(lignes).set_index("critère").round(0)
 
@@ -173,7 +183,8 @@ def bracket_probabilities(demis, finale, neutraliser_geo=True):
     titres = {}
     for x, adversaires in [(a1, (a2, b2)), (b1, (a2, b2)),
                            (a2, (a1, b1)), (b2, (a1, b1))]:
-        total = sum(demi[y] * match_proba(x, y, finale["city"], finale["country"])
+        total = sum(demi[y] * match_proba(x, y, finale["city"], finale["country"],
+                                          neutraliser_geo=neutraliser_geo)
                     for y in adversaires)
         titres[x] = demi[x] * total
 
